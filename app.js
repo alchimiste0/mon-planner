@@ -14,12 +14,12 @@ import {
 // ⬇️⬇️⬇️ COLLE TA CONFIGURATION FIREBASE ICI ⬇️⬇️⬇️
 // Tu dois aller dans Console Firebase > Project Settings > General > Your apps
 const firebaseConfig = {
-    apiKey: "AIzaSyDSmjGX7FMux4ACLxql_RVSCQDh9L99mNU",
-    authDomain: "moneventplanner-1.firebaseapp.com",
-    projectId: "moneventplanner-1",
-    storageBucket: "moneventplanner-1.firebasestorage.app",
-    messagingSenderId: "47840441468",
-    appId: "1:47840441468:web:78581503b37dbadec6c5f9"
+  apiKey: "AIzaSyDSmjGX7FMux4ACLxql_RVSCQDh9L99mNU",
+  authDomain: "moneventplanner-1.firebaseapp.com",
+  projectId: "moneventplanner-1",
+  storageBucket: "moneventplanner-1.firebasestorage.app",
+  messagingSenderId: "47840441468",
+  appId: "1:47840441468:web:78581503b37dbadec6c5f9"
 };
 // ⬆️⬆️⬆️ REMPLACE CE BLOC PAR TES CLÉS À TOI ! ⬆️⬆️⬆️
 // ------------------------------------------------------------------
@@ -388,3 +388,4 @@ document.getElementById('chat-form').onsubmit = async (e) => {
         scrollToBottom();
     }
 };
+
