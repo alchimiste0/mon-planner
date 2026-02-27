@@ -10,14 +10,14 @@ import {
     getStorage, ref, uploadBytes, getDownloadURL 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
-// --- CONFIGURATION FIREBASE (REMETS TES CLÉS ICI) ---
+// --- TA CONFIGURATION FIREBASE (RECOPIÉE DEPUIS TON IMAGE) ---
 const firebaseConfig = {
-	apiKey: "AIzaSyDSmjGX7FMux4ACLxql_RVSCQDh9L99mNU",
-	authDomain: "moneventplanner-1.firebaseapp.com",
-	projectId: "moneventplanner-1",
-	storageBucket: "moneventplanner-1.firebasestorage.app",
-	messagingSenderId: "47840441468",
-	appId: "1:47840441468:web:78581503b37dbadec6c5f9"
+    apiKey: "AIzaSyDsmjGX7FMux4ACLxql_RVSCQDh9L99mNU",
+    authDomain: "moneventplanner-1.firebaseapp.com",
+    projectId: "moneventplanner-1",
+    storageBucket: "moneventplanner-1.firebasestorage.app",
+    messagingSenderId: "47840441468",
+    appId: "1:47840441468:web:78581503b37dbadec6c5f9"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -97,11 +97,16 @@ function updateHeaderUI(user) {
     document.getElementById('header-avatar').src = user.photoURL || DEFAULT_AVATAR;
     document.getElementById('profile-friend-code').textContent = currentUser.fullData.friendCode || "...";
 }
+
+// BOUTON RETOUR MOBILE AMÉLIORÉ
 document.getElementById('mobile-back-btn').onclick = () => {
     document.getElementById('main-container').classList.remove('mobile-chat-active');
     currentChatId = null;
     document.querySelectorAll('.list-item').forEach(e => e.classList.remove('active'));
+    document.getElementById('chat-view').classList.add('hidden');
+    document.getElementById('no-event-selected').classList.remove('hidden');
 };
+
 document.getElementById('lang-toggle').onclick = () => {
     currentLang = currentLang === 'fr' ? 'en' : 'fr';
     document.getElementById('lang-toggle').textContent = currentLang.toUpperCase();
@@ -271,26 +276,33 @@ function initEventsList() {
 // --- TCHAT ---
 function getConversationId(u1, u2) { return [u1, u2].sort().join('_'); }
 
+// FONCTION SCROLL
+function scrollToBottom() {
+    const chatContainer = document.getElementById('chat-messages');
+    if (chatContainer) {
+        setTimeout(() => {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }, 100);
+    }
+}
+
 function loadEventChat(eid, edata) {
     currentChatType = 'EVENT'; currentChatId = eid;
+    document.getElementById('chat-messages').innerHTML = ""; 
     updateChatViewUI(edata.title, edata.date);
+    
     document.getElementById('invite-code-btn').classList.remove('hidden');
     document.getElementById('members-list-btn').classList.remove('hidden');
 
-    // --- CORRECTION DU BOUTON COPY ---
     document.getElementById('invite-code-btn').onclick = async () => {
         let code = edata.inviteCode;
         if (!code) {
             code = generateCode("EVT-");
             await updateDoc(doc(db, "events", eid), { inviteCode: code });
         }
-        
-        // Copie sécurisée
         if (navigator.clipboard && window.isSecureContext) {
             navigator.clipboard.writeText(code).then(() => alert("Code copié : " + code));
-        } else {
-            prompt("Copie ce code :", code); // Fallback pour les navigateurs bloqués ou non-HTTPS
-        }
+        } else { prompt("Copie ce code :", code); }
     };
 
     document.getElementById('members-list-btn').onclick = async () => {
@@ -317,12 +329,15 @@ function loadEventChat(eid, edata) {
 
 function loadDirectChat(fdata) {
     currentChatType = 'DM'; currentChatId = getConversationId(currentUser.uid, fdata.uid);
+    document.getElementById('chat-messages').innerHTML = "";
+    
     updateChatViewUI(fdata.displayName, "Privé");
     document.getElementById('invite-code-btn').classList.add('hidden');
     document.getElementById('members-list-btn').classList.add('hidden');
     document.getElementById('delete-event-btn').classList.add('hidden');
     subscribeMessages(currentChatId, 'conversationId');
 }
+
 function updateChatViewUI(t, s) {
     document.getElementById('no-event-selected').classList.add('hidden');
     document.getElementById('chat-view').classList.remove('hidden');
@@ -331,15 +346,16 @@ function updateChatViewUI(t, s) {
     document.getElementById('main-container').classList.add('mobile-chat-active');
     document.querySelectorAll('.list-item').forEach(e=>e.classList.remove('active'));
 }
+
 function resetChatUI() {
     document.getElementById('main-container').classList.remove('mobile-chat-active');
     document.getElementById('no-event-selected').classList.remove('hidden');
     document.getElementById('chat-view').classList.add('hidden');
     currentChatId = null;
 }
+
 function subscribeMessages(val, field) {
     if(currentUnsubscribeChat) currentUnsubscribeChat();
-    
     const q = query(collection(db, "messages"), where(field, "==", val), orderBy("createdAt", "asc"));
     
     currentUnsubscribeChat = onSnapshot(q, (sn) => {
@@ -353,14 +369,10 @@ function subscribeMessages(val, field) {
             msgDiv.innerHTML = `${!isMe ? `<span class="msg-author">${m.displayName.split(' ')[0]}</span>` : ''}${m.text}`;
             div.appendChild(msgDiv);
         });
-        
-        // C'est ce petit bout qui force le scroll en bas
-        // On attend un tout petit peu que le navigateur affiche les messages
-        setTimeout(() => {
-            div.scrollTop = div.scrollHeight;
-        }, 50);
+        scrollToBottom();
     });
 }
+
 document.getElementById('chat-form').onsubmit = async (e) => {
     e.preventDefault();
     const txt = document.getElementById('chat-input').value.trim();
@@ -369,5 +381,6 @@ document.getElementById('chat-form').onsubmit = async (e) => {
         if(currentChatType === 'EVENT') d.eventId = currentChatId; else d.conversationId = currentChatId;
         await addDoc(collection(db, "messages"), d);
         document.getElementById('chat-input').value = "";
+        scrollToBottom();
     }
 };
