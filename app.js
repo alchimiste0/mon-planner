@@ -223,7 +223,6 @@ function initFriendsSystem() {
                     friendsList.appendChild(div);
 
                     const convoId = getConversationId(currentUser.uid, fid);
-                    // ⚠️ IMPORTANT : Si cette requête échoue, regarde la console pour le lien d'index
                     const qLastMsg = query(collection(db, "messages"), where("conversationId", "==", convoId), orderBy("createdAt", "desc"), limit(1));
 
                     const unsubMsg = onSnapshot(qLastMsg, (snapshot) => {
@@ -231,17 +230,19 @@ function initFriendsSystem() {
                             const msg = snapshot.docs[0].data();
                             const msgEl = document.getElementById(`msg-${fid}`);
                             const dotEl = document.getElementById(`dot-${fid}`);
+                            
+                            let content = "Photo/Vidéo";
+                            if(msg.text) content = msg.text;
+                            
                             const prefix = msg.uid === currentUser.uid ? "Moi : " : `${fData.displayName.split(' ')[0]} : `;
-                            if (msgEl) msgEl.textContent = prefix + msg.text;
+                            if (msgEl) msgEl.textContent = prefix + content;
                             if (msg.uid !== currentUser.uid && currentChatId !== convoId) {
                                 if (dotEl) dotEl.classList.remove('hidden');
                             } else {
                                 if (dotEl) dotEl.classList.add('hidden');
                             }
                         }
-                    }, (error) => {
-                        console.error("ERREUR INDEX MANQUANT POUR LE DERNIER MESSAGE : ", error);
-                    });
+                    }, (error) => console.error("Index manquant dernier msg", error));
                     friendListeners.push(unsubMsg);
                 }
             }
@@ -329,6 +330,115 @@ function scrollToBottom() {
     }
 }
 
+// --- GESTION DES PIÈCES JOINTES & MENU ---
+
+// Afficher/Cacher le menu au clic sur le trombone
+const attachBtn = document.getElementById('attach-btn');
+const attachMenu = document.getElementById('attachment-menu');
+
+attachBtn.onclick = (e) => {
+    e.stopPropagation();
+    attachMenu.classList.toggle('hidden');
+};
+
+// Cacher le menu si on clique ailleurs
+document.onclick = (e) => {
+    if (!attachMenu.classList.contains('hidden') && !e.target.closest('#attach-btn') && !e.target.closest('#attachment-menu')) {
+        attachMenu.classList.add('hidden');
+    }
+};
+
+// Clics sur les options du menu
+document.getElementById('btn-gallery').onclick = () => {
+    attachMenu.classList.add('hidden');
+    document.getElementById('input-gallery').click();
+};
+document.getElementById('btn-camera').onclick = () => {
+    attachMenu.classList.add('hidden');
+    document.getElementById('input-camera').click();
+};
+document.getElementById('btn-document').onclick = () => {
+    attachMenu.classList.add('hidden');
+    document.getElementById('input-document').click();
+};
+
+// Gestion des changements de fichiers (Upload)
+['input-gallery', 'input-camera', 'input-document'].forEach(id => {
+    document.getElementById(id).onchange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            if(id === 'input-document' && file.size > 800 * 1024) {
+                alert("Document trop lourd (Max 800Ko).");
+                return;
+            }
+            if (file.type.startsWith('image/')) {
+                compressImage(file); // Compression pour les images
+            } else {
+                sendFile(file); // Envoi direct pour documents (si <800ko)
+            }
+        }
+        e.target.value = ""; // Reset pour pouvoir réuploader le même fichier
+    };
+});
+
+// FONCTION DE COMPRESSION IMAGE
+function compressImage(file) {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 800; // Largeur max
+            const scaleSize = MAX_WIDTH / img.width;
+            
+            // Si l'image est plus petite que 800px, on garde la taille, sinon on réduit
+            canvas.width = (scaleSize < 1) ? MAX_WIDTH : img.width;
+            canvas.height = (scaleSize < 1) ? img.height * scaleSize : img.height;
+
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            // Export en JPEG qualité 0.6 (60%)
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+            
+            // On vérifie la taille finale
+            if(dataUrl.length > 800000) { // Environ 800Ko
+                alert("Image trop lourde même après compression.");
+            } else {
+                sendDataMessage(dataUrl, 'image');
+            }
+        }
+    }
+}
+
+// Envoi standard (sans compression, pour docs/vidéos légères)
+function sendFile(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const base64 = e.target.result;
+        const type = file.type.startsWith('image') ? 'image' : (file.type.startsWith('video') ? 'video' : 'doc');
+        sendDataMessage(base64, type);
+    };
+    reader.readAsDataURL(file);
+}
+
+// Envoi final à Firestore
+async function sendDataMessage(data, type) {
+    const d = { 
+        text: "", // Pas de texte
+        fileData: data,
+        fileType: type,
+        uid: currentUser.uid, 
+        displayName: currentUser.displayName, 
+        createdAt: serverTimestamp() 
+    };
+    if(currentChatType === 'EVENT') d.eventId = currentChatId; else d.conversationId = currentChatId;
+    await addDoc(collection(db, "messages"), d);
+    scrollToBottom();
+}
+
 function loadEventChat(eid, edata) {
     currentChatType = 'EVENT'; currentChatId = eid;
     document.getElementById('chat-messages').innerHTML = ""; 
@@ -403,12 +513,28 @@ function subscribeMessages(val, field) {
             const isMe = m.uid === currentUser.uid;
             const msgDiv = document.createElement('div');
             msgDiv.className = `message ${isMe ? 'my-msg' : 'other-msg'}`;
-            msgDiv.innerHTML = `${!isMe ? `<span class="msg-author">${m.displayName.split(' ')[0]}</span>` : ''}${m.text}`;
+            
+            // Contenu (Texte ou Image/Vidéo)
+            let contentHtml = "";
+            if (m.fileData) {
+                if (m.fileType === 'image') {
+                    contentHtml = `<img src="${m.fileData}" class="msg-attachment" onclick="window.open('${m.fileData}')" style="cursor:pointer">`;
+                } else if(m.fileType === 'video') {
+                    contentHtml = `<video src="${m.fileData}" controls class="msg-attachment"></video>`;
+                } else {
+                    contentHtml = `<a href="${m.fileData}" download="document" style="color:white;text-decoration:underline">📄 Télécharger Document</a>`;
+                }
+            } else {
+                contentHtml = m.text;
+            }
+
+            msgDiv.innerHTML = `${!isMe ? `<span class="msg-author">${m.displayName.split(' ')[0]}</span>` : ''}${contentHtml}`;
             div.appendChild(msgDiv);
         });
         scrollToBottom();
     });
 }
+
 document.getElementById('chat-form').onsubmit = async (e) => {
     e.preventDefault();
     const txt = document.getElementById('chat-input').value.trim();

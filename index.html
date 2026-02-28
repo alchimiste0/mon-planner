@@ -107,9 +107,34 @@
                             <button id="delete-event-btn" class="header-action-btn hidden" style="color:#ff4444" title="Supprimer"><i class="fas fa-trash"></i></button>
                         </div>
                     </div>
+                    
                     <div id="chat-messages"></div>
+
+                    <!-- MENU PIÈCES JOINTES (Style WhatsApp) -->
+                    <div id="attachment-menu" class="hidden">
+                        <div class="attach-option" id="btn-gallery">
+                            <div class="icon-circle" style="background: #ac44cf;"><i class="fas fa-images"></i></div>
+                            <span>Photos</span>
+                        </div>
+                        <div class="attach-option" id="btn-camera">
+                            <div class="icon-circle" style="background: #d3396d;"><i class="fas fa-camera"></i></div>
+                            <span>Caméra</span>
+                        </div>
+                        <div class="attach-option" id="btn-document">
+                            <div class="icon-circle" style="background: #5f66cd;"><i class="fas fa-file-alt"></i></div>
+                            <span>Document</span>
+                        </div>
+                    </div>
+
+                    <!-- Formulaire d'envoi -->
                     <form id="chat-form">
-                        <input type="text" id="chat-input" data-i18n-placeholder="placeholder_msg" placeholder="Message..." required autocomplete="off" aria-label="Message">
+                        <!-- Inputs cachés pour les différents types -->
+                        <input type="file" id="input-gallery" class="hidden" accept="image/*">
+                        <input type="file" id="input-camera" class="hidden" accept="image/*" capture="environment">
+                        <input type="file" id="input-document" class="hidden" accept=".pdf,.doc,.docx,.txt">
+
+                        <button type="button" id="attach-btn" title="Pièce jointe"><i class="fas fa-paperclip"></i></button>
+                        <input type="text" id="chat-input" data-i18n-placeholder="placeholder_msg" placeholder="Message..." autocomplete="off" aria-label="Message">
                         <button type="submit"><i class="fas fa-paper-plane"></i></button>
                     </form>
                 </div>
@@ -117,7 +142,7 @@
         </div>
     </div>
 
-    <!-- MODALS -->
+    <!-- MODALS (Identiques) -->
     <div id="modal-create" class="modal hidden">
         <div class="modal-content">
             <span class="close-modal">&times;</span>
