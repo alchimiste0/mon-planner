@@ -4,7 +4,7 @@ import {
     createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, deleteUser
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { 
-    getFirestore, collection, addDoc, query, orderBy, onSnapshot, deleteDoc, doc, setDoc, getDoc, getDocs, where, serverTimestamp, updateDoc, arrayUnion, arrayRemove
+    getFirestore, collection, addDoc, query, orderBy, onSnapshot, deleteDoc, doc, setDoc, getDoc, getDocs, where, serverTimestamp, updateDoc, arrayUnion, arrayRemove, limit
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { 
     getStorage, ref, uploadBytes, getDownloadURL 
@@ -12,12 +12,12 @@ import {
 
 // --- CONFIGURATION FIREBASE (REMETS TES CLÉS ICI) ---
 const firebaseConfig = {
-	apiKey: "AIzaSyDSmjGX7FMux4ACLxql_RVSCQDh9L99mNU",
-	authDomain: "moneventplanner-1.firebaseapp.com",
-	projectId: "moneventplanner-1",
-	storageBucket: "moneventplanner-1.firebasestorage.app",
-	messagingSenderId: "47840441468",
-	appId: "1:47840441468:web:78581503b37dbadec6c5f9"
+    apiKey: "AIzaSyDSmjGX7FMux4ACLxql_RVSCQDh9L99mNU",
+    authDomain: "moneventplanner-1.firebaseapp.com",
+    projectId: "moneventplanner-1",
+    storageBucket: "moneventplanner-1.firebasestorage.app",
+    messagingSenderId: "47840441468",
+    appId: "1:47840441468:web:78581503b37dbadec6c5f9"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -34,6 +34,7 @@ let currentChatId = null;
 let currentUnsubscribeChat = null;
 let userDataCache = {};
 let currentLang = 'fr';
+let friendListeners = [];
 
 const translations = {
     fr: {
@@ -97,11 +98,15 @@ function updateHeaderUI(user) {
     document.getElementById('header-avatar').src = user.photoURL || DEFAULT_AVATAR;
     document.getElementById('profile-friend-code').textContent = currentUser.fullData.friendCode || "...";
 }
+
 document.getElementById('mobile-back-btn').onclick = () => {
     document.getElementById('main-container').classList.remove('mobile-chat-active');
     currentChatId = null;
     document.querySelectorAll('.list-item').forEach(e => e.classList.remove('active'));
+    document.getElementById('chat-view').classList.add('hidden');
+    document.getElementById('no-event-selected').classList.remove('hidden');
 };
+
 document.getElementById('lang-toggle').onclick = () => {
     currentLang = currentLang === 'fr' ? 'en' : 'fr';
     document.getElementById('lang-toggle').textContent = currentLang.toUpperCase();
@@ -151,7 +156,7 @@ document.getElementById('save-profile-btn').onclick = async () => {
     window.location.reload();
 };
 
-// --- LOGIQUE AMIS ---
+// --- LOGIQUE AMIS + NOTIFS MESSAGES ---
 function initFriendsSystem() {
     onSnapshot(doc(db, "users", currentUser.uid), async (docSnap) => {
         if (!docSnap.exists()) return;
@@ -182,23 +187,68 @@ function initFriendsSystem() {
 
         const friendsList = document.getElementById('friends-list');
         friendsList.innerHTML = "";
+        friendListeners.forEach(unsub => unsub());
+        friendListeners = [];
+
         if (data.friends?.length > 0) {
             for (const fid of data.friends) {
                 const fSnap = await getDoc(doc(db, "users", fid));
                 if (fSnap.exists()) {
                     const fData = fSnap.data();
                     userDataCache[fid] = fData;
+                    
                     const div = document.createElement('div');
-                    div.className = `list-item ${currentChatId === getConversationId(currentUser.uid, fid) ? 'active' : ''}`;
-                    div.innerHTML = `<img src="${fData.photoURL}" class="item-img"><div class="item-content"><div class="item-title">${fData.displayName}</div></div><button class="remove-friend-btn"><i class="fas fa-user-times"></i></button>`;
-                    div.onclick = (e) => { if(!e.target.closest('.remove-friend-btn')) loadDirectChat(fData); };
+                    div.className = 'list-item';
+                    if (currentChatId === getConversationId(currentUser.uid, fid)) div.classList.add('active');
+                    
+                    div.innerHTML = `
+                        <div class="avatar-container">
+                            <img src="${fData.photoURL}" class="item-img">
+                            <div class="friend-notif-dot hidden" id="dot-${fid}"></div>
+                        </div>
+                        <div class="item-content">
+                            <div class="item-title">${fData.displayName}</div>
+                            <div class="last-message" id="msg-${fid}">Aucun message</div>
+                        </div>
+                        <button class="remove-friend-btn"><i class="fas fa-user-times"></i></button>
+                    `;
+
+                    div.onclick = (e) => { 
+                        if(!e.target.closest('.remove-friend-btn')) {
+                            loadDirectChat(fData);
+                            document.getElementById(`dot-${fid}`).classList.add('hidden');
+                        }
+                    };
                     div.querySelector('.remove-friend-btn').onclick = (e) => { e.stopPropagation(); removeFriend(fid, fData.displayName); };
                     friendsList.appendChild(div);
+
+                    const convoId = getConversationId(currentUser.uid, fid);
+                    // ⚠️ IMPORTANT : Si cette requête échoue, regarde la console pour le lien d'index
+                    const qLastMsg = query(collection(db, "messages"), where("conversationId", "==", convoId), orderBy("createdAt", "desc"), limit(1));
+
+                    const unsubMsg = onSnapshot(qLastMsg, (snapshot) => {
+                        if (!snapshot.empty) {
+                            const msg = snapshot.docs[0].data();
+                            const msgEl = document.getElementById(`msg-${fid}`);
+                            const dotEl = document.getElementById(`dot-${fid}`);
+                            const prefix = msg.uid === currentUser.uid ? "Moi : " : `${fData.displayName.split(' ')[0]} : `;
+                            if (msgEl) msgEl.textContent = prefix + msg.text;
+                            if (msg.uid !== currentUser.uid && currentChatId !== convoId) {
+                                if (dotEl) dotEl.classList.remove('hidden');
+                            } else {
+                                if (dotEl) dotEl.classList.add('hidden');
+                            }
+                        }
+                    }, (error) => {
+                        console.error("ERREUR INDEX MANQUANT POUR LE DERNIER MESSAGE : ", error);
+                    });
+                    friendListeners.push(unsubMsg);
                 }
             }
         } else { friendsList.innerHTML = "<div style='padding:10px;opacity:0.5;font-size:0.9rem'>Aucun ami.</div>"; }
     });
 }
+
 document.getElementById('add-friend-btn').onclick = async () => {
     const code = document.getElementById('add-friend-input').value.trim().toUpperCase();
     if (!code || code === currentUser.fullData.friendCode) return;
@@ -271,28 +321,28 @@ function initEventsList() {
 // --- TCHAT ---
 function getConversationId(u1, u2) { return [u1, u2].sort().join('_'); }
 
+function scrollToBottom() {
+    const chatContainer = document.getElementById('chat-messages');
+    if (chatContainer) {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+        setTimeout(() => { chatContainer.scrollTop = chatContainer.scrollHeight; }, 100);
+    }
+}
+
 function loadEventChat(eid, edata) {
     currentChatType = 'EVENT'; currentChatId = eid;
+    document.getElementById('chat-messages').innerHTML = ""; 
     updateChatViewUI(edata.title, edata.date);
     document.getElementById('invite-code-btn').classList.remove('hidden');
     document.getElementById('members-list-btn').classList.remove('hidden');
-
-    // --- CORRECTION DU BOUTON COPY ---
     document.getElementById('invite-code-btn').onclick = async () => {
         let code = edata.inviteCode;
         if (!code) {
             code = generateCode("EVT-");
             await updateDoc(doc(db, "events", eid), { inviteCode: code });
         }
-        
-        // Copie sécurisée
-        if (navigator.clipboard && window.isSecureContext) {
-            navigator.clipboard.writeText(code).then(() => alert("Code copié : " + code));
-        } else {
-            prompt("Copie ce code :", code); // Fallback pour les navigateurs bloqués ou non-HTTPS
-        }
+        if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(code).then(() => alert("Code copié : " + code)); } else { prompt("Copie ce code :", code); }
     };
-
     document.getElementById('members-list-btn').onclick = async () => {
         document.getElementById('modal-members').classList.remove('hidden');
         const cont = document.getElementById('members-list-container');
@@ -317,6 +367,11 @@ function loadEventChat(eid, edata) {
 
 function loadDirectChat(fdata) {
     currentChatType = 'DM'; currentChatId = getConversationId(currentUser.uid, fdata.uid);
+    document.getElementById('chat-messages').innerHTML = "";
+    
+    const dot = document.getElementById(`dot-${fdata.uid}`);
+    if(dot) dot.classList.add('hidden');
+
     updateChatViewUI(fdata.displayName, "Privé");
     document.getElementById('invite-code-btn').classList.add('hidden');
     document.getElementById('members-list-btn').classList.add('hidden');
@@ -339,9 +394,7 @@ function resetChatUI() {
 }
 function subscribeMessages(val, field) {
     if(currentUnsubscribeChat) currentUnsubscribeChat();
-    
     const q = query(collection(db, "messages"), where(field, "==", val), orderBy("createdAt", "asc"));
-    
     currentUnsubscribeChat = onSnapshot(q, (sn) => {
         const div = document.getElementById('chat-messages');
         div.innerHTML = "";
@@ -353,12 +406,7 @@ function subscribeMessages(val, field) {
             msgDiv.innerHTML = `${!isMe ? `<span class="msg-author">${m.displayName.split(' ')[0]}</span>` : ''}${m.text}`;
             div.appendChild(msgDiv);
         });
-        
-        // C'est ce petit bout qui force le scroll en bas
-        // On attend un tout petit peu que le navigateur affiche les messages
-        setTimeout(() => {
-            div.scrollTop = div.scrollHeight;
-        }, 50);
+        scrollToBottom();
     });
 }
 document.getElementById('chat-form').onsubmit = async (e) => {
@@ -369,5 +417,6 @@ document.getElementById('chat-form').onsubmit = async (e) => {
         if(currentChatType === 'EVENT') d.eventId = currentChatId; else d.conversationId = currentChatId;
         await addDoc(collection(db, "messages"), d);
         document.getElementById('chat-input').value = "";
+        scrollToBottom();
     }
 };
