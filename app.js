@@ -35,6 +35,7 @@ let currentUnsubscribeChat = null;
 let userDataCache = {};
 let currentLang = 'fr';
 let friendListeners = [];
+let videoStream = null;
 
 const translations = {
     fr: {
@@ -134,7 +135,10 @@ function switchTab(tab) {
         document.getElementById('tab-content-events').classList.add('hidden');
     }
 }
-document.querySelectorAll('.close-modal').forEach(b => b.onclick = () => document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden')));
+document.querySelectorAll('.close-modal').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
+    stopCamera(); // Stop la caméra si on ferme la modale
+});
 
 // Profil
 document.getElementById('open-profile-btn').onclick = () => {
@@ -331,8 +335,6 @@ function scrollToBottom() {
 }
 
 // --- GESTION DES PIÈCES JOINTES & MENU ---
-
-// Afficher/Cacher le menu au clic sur le trombone
 const attachBtn = document.getElementById('attach-btn');
 const attachMenu = document.getElementById('attachment-menu');
 
@@ -341,29 +343,38 @@ attachBtn.onclick = (e) => {
     attachMenu.classList.toggle('hidden');
 };
 
-// Cacher le menu si on clique ailleurs
 document.onclick = (e) => {
     if (!attachMenu.classList.contains('hidden') && !e.target.closest('#attach-btn') && !e.target.closest('#attachment-menu')) {
         attachMenu.classList.add('hidden');
     }
 };
 
-// Clics sur les options du menu
 document.getElementById('btn-gallery').onclick = () => {
     attachMenu.classList.add('hidden');
     document.getElementById('input-gallery').click();
 };
+
+// MODIFICATION DU BOUTON CAMÉRA (Mobile vs PC)
 document.getElementById('btn-camera').onclick = () => {
     attachMenu.classList.add('hidden');
-    document.getElementById('input-camera').click();
+    
+    // Détection si Mobile ou PC
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+        // Mobile : On utilise l'input capture natif
+        document.getElementById('input-camera-mobile').click();
+    } else {
+        // PC : On ouvre la modale Webcam
+        openWebcam();
+    }
 };
+
 document.getElementById('btn-document').onclick = () => {
     attachMenu.classList.add('hidden');
     document.getElementById('input-document').click();
 };
 
 // Gestion des changements de fichiers (Upload)
-['input-gallery', 'input-camera', 'input-document'].forEach(id => {
+['input-gallery', 'input-camera-mobile', 'input-document'].forEach(id => {
     document.getElementById(id).onchange = (e) => {
         const file = e.target.files[0];
         if (file) {
@@ -372,16 +383,61 @@ document.getElementById('btn-document').onclick = () => {
                 return;
             }
             if (file.type.startsWith('image/')) {
-                compressImage(file); // Compression pour les images
+                compressImage(file);
             } else {
-                sendFile(file); // Envoi direct pour documents (si <800ko)
+                sendFile(file);
             }
         }
-        e.target.value = ""; // Reset pour pouvoir réuploader le même fichier
+        e.target.value = "";
     };
 });
 
-// FONCTION DE COMPRESSION IMAGE
+// --- LOGIQUE WEBCAM (PC) ---
+function openWebcam() {
+    const modal = document.getElementById('modal-webcam');
+    const video = document.getElementById('webcam-video');
+    modal.classList.remove('hidden');
+
+    navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => {
+            videoStream = stream;
+            video.srcObject = stream;
+        })
+        .catch(err => {
+            alert("Impossible d'accéder à la caméra : " + err.message);
+            modal.classList.add('hidden');
+        });
+}
+
+// Bouton "Prendre photo" dans la modale
+document.getElementById('snap-btn').onclick = () => {
+    const video = document.getElementById('webcam-video');
+    const canvas = document.getElementById('webcam-canvas');
+    const context = canvas.getContext('2d');
+
+    // Définir la taille du canvas comme la vidéo
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    // Dessiner l'image
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    // Convertir en Base64 (Qualité 0.7 pour réduire la taille)
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+    
+    sendDataMessage(dataUrl, 'image');
+    stopCamera();
+    document.getElementById('modal-webcam').classList.add('hidden');
+};
+
+function stopCamera() {
+    if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+        videoStream = null;
+    }
+}
+
+// FONCTION COMPRESSION
 function compressImage(file) {
     const reader = new FileReader();
     reader.readAsDataURL(file);
@@ -390,30 +446,18 @@ function compressImage(file) {
         img.src = event.target.result;
         img.onload = () => {
             const canvas = document.createElement('canvas');
-            const MAX_WIDTH = 800; // Largeur max
+            const MAX_WIDTH = 800;
             const scaleSize = MAX_WIDTH / img.width;
-            
-            // Si l'image est plus petite que 800px, on garde la taille, sinon on réduit
             canvas.width = (scaleSize < 1) ? MAX_WIDTH : img.width;
             canvas.height = (scaleSize < 1) ? img.height * scaleSize : img.height;
-
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-            // Export en JPEG qualité 0.6 (60%)
             const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
-            
-            // On vérifie la taille finale
-            if(dataUrl.length > 800000) { // Environ 800Ko
-                alert("Image trop lourde même après compression.");
-            } else {
-                sendDataMessage(dataUrl, 'image');
-            }
+            if(dataUrl.length > 800000) { alert("Image trop lourde."); } else { sendDataMessage(dataUrl, 'image'); }
         }
     }
 }
 
-// Envoi standard (sans compression, pour docs/vidéos légères)
 function sendFile(file) {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -424,15 +468,10 @@ function sendFile(file) {
     reader.readAsDataURL(file);
 }
 
-// Envoi final à Firestore
 async function sendDataMessage(data, type) {
     const d = { 
-        text: "", // Pas de texte
-        fileData: data,
-        fileType: type,
-        uid: currentUser.uid, 
-        displayName: currentUser.displayName, 
-        createdAt: serverTimestamp() 
+        text: "", fileData: data, fileType: type,
+        uid: currentUser.uid, displayName: currentUser.displayName, createdAt: serverTimestamp() 
     };
     if(currentChatType === 'EVENT') d.eventId = currentChatId; else d.conversationId = currentChatId;
     await addDoc(collection(db, "messages"), d);
@@ -514,7 +553,6 @@ function subscribeMessages(val, field) {
             const msgDiv = document.createElement('div');
             msgDiv.className = `message ${isMe ? 'my-msg' : 'other-msg'}`;
             
-            // Contenu (Texte ou Image/Vidéo)
             let contentHtml = "";
             if (m.fileData) {
                 if (m.fileType === 'image') {

@@ -2,7 +2,8 @@
 <html lang="fr" data-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- Viewport optimisé : interactive-widget=resizes-content permet de remonter le clavier sans cacher l'input -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
     <title>Social Planner</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -107,10 +108,9 @@
                             <button id="delete-event-btn" class="header-action-btn hidden" style="color:#ff4444" title="Supprimer"><i class="fas fa-trash"></i></button>
                         </div>
                     </div>
-                    
                     <div id="chat-messages"></div>
-
-                    <!-- MENU PIÈCES JOINTES (Style WhatsApp) -->
+                    
+                    <!-- MENU PIÈCES JOINTES -->
                     <div id="attachment-menu" class="hidden">
                         <div class="attach-option" id="btn-gallery">
                             <div class="icon-circle" style="background: #ac44cf;"><i class="fas fa-images"></i></div>
@@ -126,11 +126,11 @@
                         </div>
                     </div>
 
-                    <!-- Formulaire d'envoi -->
+                    <!-- BARRE D'ÉCRITURE -->
                     <form id="chat-form">
-                        <!-- Inputs cachés pour les différents types -->
                         <input type="file" id="input-gallery" class="hidden" accept="image/*">
-                        <input type="file" id="input-camera" class="hidden" accept="image/*" capture="environment">
+                        <!-- Camera Input (Mobile fallback) -->
+                        <input type="file" id="input-camera-mobile" class="hidden" accept="image/*" capture="environment">
                         <input type="file" id="input-document" class="hidden" accept=".pdf,.doc,.docx,.txt">
 
                         <button type="button" id="attach-btn" title="Pièce jointe"><i class="fas fa-paperclip"></i></button>
@@ -142,14 +142,27 @@
         </div>
     </div>
 
-    <!-- MODALS (Identiques) -->
+    <!-- MODAL: WEBCAM (PC ONLY) -->
+    <div id="modal-webcam" class="modal hidden">
+        <div class="modal-content" style="text-align: center; max-width: 600px;">
+            <span class="close-modal" id="close-webcam">&times;</span>
+            <h2>Prendre une photo</h2>
+            <div class="video-container" style="margin: 10px 0; background: black; border-radius: 8px; overflow: hidden;">
+                <video id="webcam-video" autoplay playsinline style="width: 100%; max-height: 400px;"></video>
+                <canvas id="webcam-canvas" class="hidden"></canvas>
+            </div>
+            <button id="snap-btn" class="btn-primary full-width"><i class="fas fa-camera"></i> Prendre la photo</button>
+        </div>
+    </div>
+
+    <!-- MODALS EXISTANTES -->
     <div id="modal-create" class="modal hidden">
         <div class="modal-content">
             <span class="close-modal">&times;</span>
             <h2 data-i18n="new_event">Nouvel Événement</h2>
             <form id="create-event-form">
-                <input type="text" id="new-event-title" data-i18n-placeholder="event_title" placeholder="Titre" required aria-label="Titre événement">
-                <input type="date" id="new-event-date" required aria-label="Date événement">
+                <input type="text" id="new-event-title" data-i18n-placeholder="event_title" placeholder="Titre" required>
+                <input type="date" id="new-event-date" required>
                 <p style="margin:15px 0 5px; font-weight:bold;" data-i18n="invite_friends">Inviter des amis :</p>
                 <div id="users-checkbox-list"></div>
                 <button type="submit" class="btn-primary full-width" data-i18n="btn_create">Créer</button>
@@ -161,8 +174,7 @@
         <div class="modal-content">
             <span class="close-modal">&times;</span>
             <h2 data-i18n="join_event_title">Rejoindre</h2>
-            <p style="margin-bottom:10px;">Code d'invitation :</p>
-            <input type="text" id="join-event-code" placeholder="EVT-..." style="text-align:center; font-size:1.2rem; text-transform:uppercase;" aria-label="Code événement">
+            <input type="text" id="join-event-code" placeholder="EVT-..." style="text-align:center; font-size:1.2rem; text-transform:uppercase;">
             <button id="confirm-join-btn" class="btn-primary full-width" style="margin-top:10px;">Rejoindre</button>
         </div>
     </div>
@@ -184,8 +196,7 @@
                     <img id="preview-avatar" src="" style="width:80px; height:80px; border-radius:50%; object-fit:cover; border:2px solid #667eea;">
                 </div>
                 <div class="friend-code-display">
-                    <span data-i18n="my_code">Mon Code Ami : </span>
-                    <strong id="profile-friend-code" style="color: #667eea; font-size: 1.2rem;">...</strong>
+                    <strong id="profile-friend-code" style="color: #667eea;">...</strong>
                 </div>
                 <label for="file-photo" data-i18n="change_photo">Changer la photo</label>
                 <input type="file" id="file-photo" accept="image/*">
