@@ -2,11 +2,10 @@
 <html lang="fr" data-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <!-- Viewport optimisé : interactive-widget=resizes-content permet de remonter le clavier sans cacher l'input -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
     <title>Social Planner</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
 
@@ -100,7 +99,10 @@
                         <button id="mobile-back-btn" class="mobile-only"><i class="fas fa-arrow-left"></i></button>
                         <div class="chat-info">
                             <h3 id="chat-title">Titre</h3>
-                            <span id="chat-subtitle" style="font-size: 0.8rem; opacity: 0.7;">Infos</span>
+                            <div id="chat-status-container">
+                                <span id="chat-subtitle" style="font-size: 0.8rem; opacity: 0.7;">Infos</span>
+                                <span id="chat-online-status" class="hidden" style="font-size: 0.75rem; color: #667eea; display: block;"></span>
+                            </div>
                         </div>
                         <div class="chat-actions">
                             <button id="invite-code-btn" class="header-action-btn hidden" title="Code"><i class="fas fa-key"></i></button>
@@ -126,10 +128,8 @@
                         </div>
                     </div>
 
-                    <!-- BARRE D'ÉCRITURE -->
                     <form id="chat-form">
                         <input type="file" id="input-gallery" class="hidden" accept="image/*">
-                        <!-- Camera Input (Mobile fallback) -->
                         <input type="file" id="input-camera-mobile" class="hidden" accept="image/*" capture="environment">
                         <input type="file" id="input-document" class="hidden" accept=".pdf,.doc,.docx,.txt">
 
@@ -142,7 +142,7 @@
         </div>
     </div>
 
-    <!-- MODAL: WEBCAM (PC ONLY) -->
+    <!-- MODAL WEBCAM (PC) -->
     <div id="modal-webcam" class="modal hidden">
         <div class="modal-content" style="text-align: center; max-width: 600px;">
             <span class="close-modal" id="close-webcam">&times;</span>
@@ -152,6 +152,38 @@
                 <canvas id="webcam-canvas" class="hidden"></canvas>
             </div>
             <button id="snap-btn" class="btn-primary full-width"><i class="fas fa-camera"></i> Prendre la photo</button>
+        </div>
+    </div>
+
+    <!-- LIGHTBOX (VISIONNEUSE PHOTO) -->
+    <div id="lightbox" class="hidden">
+        <span class="close-lightbox">&times;</span>
+        <div class="lightbox-controls">
+            <button id="zoom-in"><i class="fas fa-search-plus"></i></button>
+            <button id="zoom-out"><i class="fas fa-search-minus"></i></button>
+            <button id="download-img"><i class="fas fa-download"></i></button>
+        </div>
+        <img id="lightbox-img" src="">
+    </div>
+
+    <!-- NOUVEAU MENU CONTEXTUEL (INFOS + ACTIONS) -->
+    <div id="msg-context-menu" class="hidden">
+        <!-- Section Infos -->
+        <div class="ctx-info-section">
+            <div class="ctx-info-row">
+                <i class="fas fa-paper-plane"></i> Envoyé à : <span id="ctx-sent-time">--:--</span>
+            </div>
+            <div class="ctx-info-row" id="ctx-read-row">
+                <i class="fas fa-check-double" style="color:#4fc3f7"></i> Lu à : <span id="ctx-read-time">--:--</span>
+            </div>
+        </div>
+        <div class="ctx-separator"></div>
+        <!-- Section Actions -->
+        <div class="ctx-item" id="ctx-delete-me">
+            <i class="fas fa-trash"></i> Supprimer pour moi
+        </div>
+        <div class="ctx-item" id="ctx-delete-all" style="color:#ff4444">
+            <i class="fas fa-trash-alt"></i> Supprimer pour tout le monde
         </div>
     </div>
 
