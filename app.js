@@ -85,7 +85,7 @@ async function syncUserToFirestore(user) {
     }
     
     await setDoc(userRef, data, { merge: true });
-    updatePresence(); // Force la présence ligne
+    updatePresence(); 
     return userSnap.exists() ? userSnap.data() : data;
 }
 
@@ -194,7 +194,7 @@ document.getElementById('save-profile-btn').onclick = async () => {
     window.location.reload();
 };
 
-// --- SYSTÈME D'AMIS (LISTE + DERNIER MESSAGE + NOTIFS) ---
+// --- SYSTÈME D'AMIS (ANTI-DOUBLON TOTAL) ---
 
 function initFriendsSystem() {
     onSnapshot(doc(db, "users", currentUser.uid), async (docSnap) => {
@@ -202,7 +202,7 @@ function initFriendsSystem() {
         const data = docSnap.data();
         currentUser.fullData = data;
         
-        // Badge général Amis
+        // Badge notif
         const badge = document.getElementById('notif-friends');
         const reqCount = data.friendRequestsReceived?.length || 0;
         if(reqCount > 0) { badge.classList.remove('hidden'); } else { badge.classList.add('hidden'); }
@@ -227,15 +227,15 @@ function initFriendsSystem() {
             }
         } else { reqContainer.classList.add('hidden'); }
 
-        // Liste des amis
+        // Liste des amis - NETTOYAGE COMPLET POUR ÉVITER DOUBLONS
         const friendsList = document.getElementById('friends-list');
-        friendsList.innerHTML = "";
+        friendsList.innerHTML = ""; // On vide visuellement
         
-        // Nettoyage des anciens écouteurs pour éviter les fuites de mémoire
+        // On détruit les anciens écouteurs de messages pour ne pas les empiler
         friendListeners.forEach(unsub => unsub());
         friendListeners = [];
 
-        // SOLUTION DUPLICATION : Utilisation de Set pour IDs uniques
+        // On utilise un Set pour s'assurer qu'il n'y a pas d'ID en double dans les données brutes
         const uniqueFriends = [...new Set(data.friends || [])];
 
         if (uniqueFriends.length > 0) {
@@ -271,7 +271,7 @@ function initFriendsSystem() {
                     
                     friendsList.appendChild(div);
 
-                    // Écouteur pour le dernier message et la notification
+                    // Écouteur pour le dernier message
                     const convoId = getConversationId(currentUser.uid, fid);
                     const qLastMsg = query(
                         collection(db, "messages"), 
@@ -286,30 +286,29 @@ function initFriendsSystem() {
                             const msgEl = document.getElementById(`msg-${fid}`);
                             const dotEl = document.getElementById(`dot-${fid}`);
                             
-                            // Gestion message supprimé
-                            if(msg.deletedFor && msg.deletedFor.includes(currentUser.uid)) {
-                                if (msgEl) msgEl.textContent = "Message supprimé";
-                                return;
-                            }
+                            if (msgEl) {
+                                if(msg.deletedFor && msg.deletedFor.includes(currentUser.uid)) {
+                                    msgEl.textContent = "Message supprimé";
+                                    return;
+                                }
 
-                            // Contenu
-                            let content = "Média";
-                            if(msg.text) content = msg.text;
-                            else if(msg.fileType === 'image') content = "📷 Photo";
-                            else if(msg.fileType === 'video') content = "🎥 Vidéo";
-                            else if(msg.fileType === 'doc') content = "📄 Document";
+                                let content = "Média";
+                                if(msg.text) content = msg.text;
+                                else if(msg.fileType === 'image') content = "📷 Photo";
+                                else if(msg.fileType === 'video') content = "🎥 Vidéo";
+                                else if(msg.fileType === 'doc') content = "📄 Document";
 
-                            const prefix = msg.uid === currentUser.uid ? "Moi : " : `${fData.displayName.split(' ')[0]} : `;
-                            if (msgEl) msgEl.textContent = prefix + content;
+                                const prefix = msg.uid === currentUser.uid ? "Moi : " : `${fData.displayName.split(' ')[0]} : `;
+                                msgEl.textContent = prefix + content;
 
-                            // Affichage Point Rouge
-                            if (msg.uid !== currentUser.uid && currentChatId !== convoId && msg.status !== 'read') {
-                                if (dotEl) dotEl.classList.remove('hidden');
-                            } else {
-                                if (dotEl) dotEl.classList.add('hidden');
+                                if (msg.uid !== currentUser.uid && currentChatId !== convoId && msg.status !== 'read') {
+                                    if(dotEl) dotEl.classList.remove('hidden');
+                                } else {
+                                    if(dotEl) dotEl.classList.add('hidden');
+                                }
                             }
                         }
-                    }, (error) => console.log("Index manquant pour LastMsg (voir console)"));
+                    }, (error) => console.log("Index manquant (voir console)"));
                     
                     friendListeners.push(unsubMsg);
                 }
@@ -400,7 +399,6 @@ function scrollToBottom() {
     }
 }
 
-// Formatage du statut en ligne
 function getStatusText(lastSeenTimestamp) {
     if (!lastSeenTimestamp) return "Hors ligne";
     const lastSeen = lastSeenTimestamp.toDate();
@@ -409,7 +407,6 @@ function getStatusText(lastSeenTimestamp) {
     return "Vu à " + lastSeen.getHours().toString().padStart(2,'0') + ":" + lastSeen.getMinutes().toString().padStart(2,'0');
 }
 
-// Marquer comme lu
 function markMessagesAsRead(snapshot) {
     snapshot.docs.forEach(docSnap => {
         const msg = docSnap.data();
@@ -514,7 +511,7 @@ document.querySelector('.close-lightbox').onclick = () => document.getElementByI
 document.getElementById('zoom-in').onclick = () => { zoomLevel += 0.2; document.getElementById('lightbox-img').style.transform = `scale(${zoomLevel})`; };
 document.getElementById('zoom-out').onclick = () => { if(zoomLevel > 0.4) zoomLevel -= 0.2; document.getElementById('lightbox-img').style.transform = `scale(${zoomLevel})`; };
 
-// --- MENU CONTEXTUEL (POSITION & INFOS CORRIGÉS) ---
+// --- MENU CONTEXTUEL (POSITION, COPIER, TELECHARGER) ---
 const ctxMenu = document.getElementById('msg-context-menu');
 let longPressTimer;
 
@@ -525,12 +522,11 @@ function addContextMenuListeners(element, msgId, msgData) {
 }
 
 function showContextMenu(x, y, msgId, msgData) {
-    // Calcul de position pour ne pas sortir de l'écran
-    const menuWidth = 220;
-    const menuHeight = 160;
+    const menuWidth = 220; const menuHeight = 220;
     
-    if (x + menuWidth > window.innerWidth) x = x - menuWidth;
-    if (y + menuHeight > window.innerHeight) y = y - menuHeight;
+    // Garder le menu dans l'écran
+    if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 10;
+    if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 10;
 
     ctxMenu.style.left = `${x}px`; 
     ctxMenu.style.top = `${y}px`; 
@@ -542,8 +538,10 @@ function showContextMenu(x, y, msgId, msgData) {
     const readTime = document.getElementById('ctx-read-time');
     const deleteMe = document.getElementById('ctx-delete-me');
     const deleteAll = document.getElementById('ctx-delete-all');
+    const btnCopy = document.getElementById('ctx-copy-text');
+    const btnDownload = document.getElementById('ctx-download-media');
 
-    // Affichage Heures
+    // Heures
     if (msgData.createdAt) {
         const sd = msgData.createdAt.toDate();
         sentTime.textContent = sd.getHours().toString().padStart(2,'0')+':'+sd.getMinutes().toString().padStart(2,'0');
@@ -555,7 +553,24 @@ function showContextMenu(x, y, msgId, msgData) {
         readTime.textContent = rd.getHours().toString().padStart(2,'0')+':'+rd.getMinutes().toString().padStart(2,'0');
     } else { readInfo.style.display = 'none'; }
 
-    // Actions suppression
+    // Copier vs Télécharger
+    if (msgData.fileData && (msgData.fileType === 'image' || msgData.fileType === 'video')) {
+        btnCopy.style.display = 'none';
+        btnDownload.style.display = 'flex';
+        btnDownload.onclick = () => {
+            const a = document.createElement('a'); a.href = msgData.fileData; a.download = `file_${Date.now()}`; a.click();
+            ctxMenu.classList.add('hidden');
+        };
+    } else {
+        btnCopy.style.display = 'flex';
+        btnDownload.style.display = 'none';
+        btnCopy.onclick = () => {
+            if (navigator.clipboard) navigator.clipboard.writeText(msgData.text);
+            ctxMenu.classList.add('hidden');
+        };
+    }
+
+    // Suppression
     deleteMe.onclick = async () => { 
         await updateDoc(doc(db, "messages", msgId), { deletedFor: arrayUnion(currentUser.uid) }); 
         ctxMenu.classList.add('hidden'); 
@@ -586,7 +601,22 @@ function loadEventChat(eid, edata) {
         if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(code).then(() => alert("Code copié : " + code)); } else { prompt("Copie ce code :", code); }
     };
     
-    // ... Boutons membres et delete events inchangés ...
+    // Boutons membres
+    document.getElementById('members-list-btn').onclick = async () => {
+        document.getElementById('modal-members').classList.remove('hidden');
+        const cont = document.getElementById('members-list-container');
+        cont.innerHTML = "Chargement...";
+        let html = "";
+        for(const uid of edata.attendees) {
+            const uSnap = await getDoc(doc(db, "users", uid));
+            if(uSnap.exists()) {
+                const u = uSnap.data();
+                html += `<div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid #444;"><img src="${u.photoURL}" style="width:30px;height:30px;border-radius:50%"><span>${u.displayName}</span></div>`;
+            }
+        }
+        cont.innerHTML = html;
+    };
+
     const btnDel = document.getElementById('delete-event-btn');
     if(edata.createdBy === currentUser.uid) { btnDel.classList.remove('hidden'); btnDel.onclick = async () => { if(confirm("Supprimer ?")) { await deleteDoc(doc(db, "events", eid)); resetChatUI(); } }; } else btnDel.classList.add('hidden');
     

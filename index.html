@@ -155,7 +155,7 @@
         </div>
     </div>
 
-    <!-- LIGHTBOX (VISIONNEUSE PHOTO) -->
+    <!-- LIGHTBOX -->
     <div id="lightbox" class="hidden">
         <span class="close-lightbox">&times;</span>
         <div class="lightbox-controls">
@@ -166,9 +166,9 @@
         <img id="lightbox-img" src="">
     </div>
 
-    <!-- NOUVEAU MENU CONTEXTUEL (INFOS + ACTIONS) -->
+    <!-- MENU CONTEXTUEL MESSAGE -->
     <div id="msg-context-menu" class="hidden">
-        <!-- Section Infos -->
+        <!-- Infos -->
         <div class="ctx-info-section">
             <div class="ctx-info-row">
                 <i class="fas fa-paper-plane"></i> Envoyé à : <span id="ctx-sent-time">--:--</span>
@@ -178,7 +178,13 @@
             </div>
         </div>
         <div class="ctx-separator"></div>
-        <!-- Section Actions -->
+        <!-- Actions -->
+        <div class="ctx-item" id="ctx-copy-text">
+            <i class="fas fa-copy"></i> Copier le texte
+        </div>
+        <div class="ctx-item" id="ctx-download-media" style="display:none;">
+            <i class="fas fa-download"></i> Télécharger
+        </div>
         <div class="ctx-item" id="ctx-delete-me">
             <i class="fas fa-trash"></i> Supprimer pour moi
         </div>
